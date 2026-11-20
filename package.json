@@ -1,0 +1,34 @@
+{
+  "name": "pebble-vera",
+  "author": "newts",
+  "version": "1.0.0",
+  "keywords": ["pebble-app", "vera", "z-wave", "thermostat"],
+  "private": true,
+  "dependencies": {
+    "pebble-clay": "^1.0.4"
+  },
+  "pebble": {
+    "displayName": "Vera Thermostat",
+    "uuid": "8212da58-ef56-49c6-940d-636b0cdfd140",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": ["emery", "basalt", "diorite"],
+    "watchapp": {
+      "watchface": false
+    },
+    "capabilities": ["configurable"],
+    "messageKeys": [
+      "Cmd",
+      "Temp",
+      "Setpoint",
+      "Heating",
+      "NewSetpoint",
+      "Error",
+      "VeraIP",
+      "DeviceNum"
+    ],
+    "resources": {
+      "media": []
+    }
+  }
+}
