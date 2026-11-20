@@ -16,6 +16,8 @@ port of a CircuitPython MagTag gadget that does the same thing.
 - Changes are sent 2 seconds after the last press, so several presses become
   one request. A pending change shows as `Set 71° *`.
 - Background is **white** when the heater is idle and **red** when it is heating.
+- Bluetooth icon in the top-left corner; an X appears next to it when the
+  phone is disconnected.
 - Refreshes every 10 seconds while open.
 - Closes itself after 60 seconds without a button press.
 

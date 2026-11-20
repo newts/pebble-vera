@@ -32,6 +32,8 @@ static TextLayer *s_status_layer;
 static TextLayer *s_hint_up;
 static TextLayer *s_hint_select;
 static TextLayer *s_hint_down;
+static Layer *s_bt_layer;
+static bool s_bt_connected = true;
 
 static AppTimer *s_poll_timer;
 static AppTimer *s_set_timer;
@@ -60,6 +62,7 @@ static void update_display(void) {
   GColor bg = s_heating ? PBL_IF_COLOR_ELSE(GColorRed, GColorBlack) : GColorWhite;
   GColor fg = s_heating ? GColorWhite : GColorBlack;
   window_set_background_color(s_window, bg);
+  layer_mark_dirty(s_bt_layer);
 
   TextLayer *layers[] = { s_room_label, s_temp_layer, s_set_layer, s_status_layer,
                           s_hint_up, s_hint_select, s_hint_down };
@@ -92,6 +95,40 @@ static void update_display(void) {
   } else {
     text_layer_set_text(s_status_layer, s_heating ? "HEATING" : "IDLE");
   }
+}
+
+// Bluetooth rune in the top-left corner. Drawn solid when the phone is
+// connected; drawn with an X beside it when the connection is lost.
+static void bt_update_proc(Layer *layer, GContext *ctx) {
+  GColor fg = s_heating ? GColorWhite : GColorBlack;
+  graphics_context_set_stroke_color(ctx, fg);
+  graphics_context_set_stroke_width(ctx, 2);
+
+  // Rune fits in a 10x16 box starting at (2, 2).
+  const int x = 2, y = 2;
+  GPoint top = GPoint(x + 5, y + 0);
+  GPoint bot = GPoint(x + 5, y + 16);
+  GPoint ur  = GPoint(x + 9, y + 4);
+  GPoint lr  = GPoint(x + 9, y + 12);
+  GPoint ul  = GPoint(x + 1, y + 4);
+  GPoint ll  = GPoint(x + 1, y + 12);
+
+  graphics_draw_line(ctx, top, bot);
+  graphics_draw_line(ctx, top, ur);
+  graphics_draw_line(ctx, ur, ll);
+  graphics_draw_line(ctx, bot, lr);
+  graphics_draw_line(ctx, lr, ul);
+
+  if (!s_bt_connected) {
+    // X to the right of the rune.
+    graphics_draw_line(ctx, GPoint(x + 14, y + 5), GPoint(x + 22, y + 13));
+    graphics_draw_line(ctx, GPoint(x + 22, y + 5), GPoint(x + 14, y + 13));
+  }
+}
+
+static void bt_handler(bool connected) {
+  s_bt_connected = connected;
+  layer_mark_dirty(s_bt_layer);
 }
 
 // --------------------------------------------------------------------------
@@ -306,6 +343,11 @@ static void window_load(Window *window) {
                           GTextAlignmentCenter);
   text_layer_set_text(s_hint_down, "-");
 
+  s_bt_layer = layer_create(GRect(0, 0, 30, 22));
+  layer_set_update_proc(s_bt_layer, bt_update_proc);
+  layer_add_child(root, s_bt_layer);
+  s_bt_connected = connection_service_peek_pebble_app_connection();
+
   update_display();
 }
 
@@ -317,6 +359,7 @@ static void window_unload(Window *window) {
   text_layer_destroy(s_hint_up);
   text_layer_destroy(s_hint_select);
   text_layer_destroy(s_hint_down);
+  layer_destroy(s_bt_layer);
 }
 
 static void init(void) {
@@ -334,6 +377,10 @@ static void init(void) {
 
   window_stack_push(s_window, true);
 
+  connection_service_subscribe((ConnectionHandlers) {
+    .pebble_app_connection_handler = bt_handler,
+  });
+
   // The phone polls on its own as soon as its JS is ready; after that the
   // watch asks every 10 seconds.
   s_poll_timer = app_timer_register(POLL_INTERVAL_MS, poll_timer_cb, NULL);
@@ -341,6 +388,7 @@ static void init(void) {
 }
 
 static void deinit(void) {
+  connection_service_unsubscribe();
   if (s_poll_timer) app_timer_cancel(s_poll_timer);
   if (s_set_timer) app_timer_cancel(s_set_timer);
   if (s_idle_timer) app_timer_cancel(s_idle_timer);
