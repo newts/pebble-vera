@@ -58,9 +58,15 @@ static void set_text_color(TextLayer *layer, GColor color) {
   text_layer_set_text_color(layer, color);
 }
 
+// Without a phone connection the heat state is unknown, so the screen is
+// only ever red while connected.
+static bool show_heating(void) {
+  return s_heating && s_bt_connected;
+}
+
 static void update_display(void) {
-  GColor bg = s_heating ? PBL_IF_COLOR_ELSE(GColorRed, GColorBlack) : GColorWhite;
-  GColor fg = s_heating ? GColorWhite : GColorBlack;
+  GColor bg = show_heating() ? PBL_IF_COLOR_ELSE(GColorRed, GColorBlack) : GColorWhite;
+  GColor fg = show_heating() ? GColorWhite : GColorBlack;
   window_set_background_color(s_window, bg);
   layer_mark_dirty(s_bt_layer);
 
@@ -86,7 +92,9 @@ static void update_display(void) {
   }
   text_layer_set_text(s_set_layer, s_set_buf);
 
-  if (s_sending) {
+  if (!s_bt_connected) {
+    text_layer_set_text(s_status_layer, "NO PHONE");
+  } else if (s_sending) {
     text_layer_set_text(s_status_layer, "SENDING...");
   } else if (s_error[0]) {
     text_layer_set_text(s_status_layer, s_error);
@@ -97,11 +105,13 @@ static void update_display(void) {
   }
 }
 
-// Bluetooth rune in the top-left corner. Drawn solid when the phone is
-// connected; drawn with an X beside it when the connection is lost.
+// Bluetooth rune in the top-left corner: blue on white, powder blue on red.
+// When the connection is lost a red X appears beside it (the screen is
+// always white then).
 static void bt_update_proc(Layer *layer, GContext *ctx) {
-  GColor fg = s_heating ? GColorWhite : GColorBlack;
-  graphics_context_set_stroke_color(ctx, fg);
+  GColor rune = show_heating() ? PBL_IF_COLOR_ELSE(GColorCeleste, GColorWhite)
+                               : PBL_IF_COLOR_ELSE(GColorBlue, GColorBlack);
+  graphics_context_set_stroke_color(ctx, rune);
   graphics_context_set_stroke_width(ctx, 2);
 
   // Rune fits in a 10x16 box starting at (2, 2).
@@ -120,15 +130,21 @@ static void bt_update_proc(Layer *layer, GContext *ctx) {
   graphics_draw_line(ctx, lr, ul);
 
   if (!s_bt_connected) {
-    // X to the right of the rune.
+    // Red X to the right of the rune.
+    graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorRed, GColorBlack));
     graphics_draw_line(ctx, GPoint(x + 14, y + 5), GPoint(x + 22, y + 13));
     graphics_draw_line(ctx, GPoint(x + 22, y + 5), GPoint(x + 14, y + 13));
   }
 }
 
+static bool send_cmd(int cmd, int value);
+
 static void bt_handler(bool connected) {
   s_bt_connected = connected;
-  layer_mark_dirty(s_bt_layer);
+  update_display();
+  if (connected) {
+    send_cmd(CMD_POLL, 0);  // refresh right away on reconnect
+  }
 }
 
 // --------------------------------------------------------------------------
